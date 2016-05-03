@@ -21,6 +21,9 @@ im = misc.fromimage(im.resize((2*im.size[0], 2*im.size[1]), resample=Image.NEARE
 # 各ピクセルの最初の要素(=Y)をモデルの長さで埋めて入力平面を生成
 # 255で割るのは0-1に収めるため
 # また、waifu2xはYCbCrのうちYのみを対象にする
+# "edge"キーワードは周囲の数字を使って拡大しろということ。
+# len(model)はモデルの層だけ拡大しろということ、すなわち7px
+# スライシングで、Yだけを取り出している……はず
 # numpy.pad(array, pad_width, mode=None, **kwargs)
 planes = [np.pad(im[:,:,0], len(model), "edge") / 255.0]
 
