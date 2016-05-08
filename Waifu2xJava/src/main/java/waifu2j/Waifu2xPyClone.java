@@ -32,8 +32,6 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.function.Function;
 
-import static waifu2j.Waifu2xPyClonePlain.showImage;
-
 public class Waifu2xPyClone {
 
     public static void main(String[] args) throws Exception {
@@ -116,7 +114,7 @@ public class Waifu2xPyClone {
         });
 //        INDArray planes = new NDArray(new int[] {1, image.slice(0, 1).length(), image.slice(0, 2).length()});
         image.putSlice(0, image);
-        showImage(toImage(convertYcbcrToRgb(image), jImage.getType()));
+//        showImage(toImage(convertYcbcrToRgb(image), jImage.getType()));
 //        showImage((toImage(toSingleColor(image, 1), jImage.getType())));
 //        showImage(toSingleScale(imageYCbCr, 0));
     }
