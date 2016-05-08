@@ -182,10 +182,10 @@ public class Waifu2xPyClonePlain {
                 b *= 255;
                 a *= 255;
 
-                r = min(r, 255);
-                g = min(g, 255);
-                b = min(b, 255);
-                a = min(a, 255);
+                r = max(min(r, 255), 0);
+                g = max(min(g, 255), 0);
+                b = max(min(b, 255), 0);
+                a = max(min(a, 255), 0);
 
                 out[h][w] = new double[] {r, g, b, a};
             }
