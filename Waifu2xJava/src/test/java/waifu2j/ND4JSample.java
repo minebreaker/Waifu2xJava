@@ -68,11 +68,11 @@ public class ND4JSample {
         INDArray r = image.slice(0);
         INDArray g = image.slice(1);
         INDArray b = image.slice(2);
-        for (int h = 0 ; h < 2 ; h++) {
-            for (int w = 0 ; w < 2 ; w++) {
-                float rp =r.getFloat(h, w);
-                float gp =g.getFloat(h, w);
-                float bp =b.getFloat(h, w);
+        for (int h = 0; h < 2; h++) {
+            for (int w = 0; w < 2; w++) {
+                float rp = r.getFloat(h, w);
+                float gp = g.getFloat(h, w);
+                float bp = b.getFloat(h, w);
 
                 double y = 0.299 * rp + 0.587 * gp + 0.114 * bp;
                 double cb = -0.169 * rp - 0.331 * gp + 0.500 * bp;

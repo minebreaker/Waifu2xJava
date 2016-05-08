@@ -32,6 +32,8 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.function.Function;
 
+import static waifu2j.Waifu2xPyClonePlain.showImage;
+
 public class Waifu2xPyClone {
 
     public static void main(String[] args) throws Exception {
@@ -67,7 +69,7 @@ public class Waifu2xPyClone {
             for (int i = 0; i < step.getJsonArray("bias").size(); i++) {
                 INDArray partial = Nd4j.zeros(3, 3); // 固定値でいいはず(kW, kH)
 
-                for (int j = 0; j < step.getJsonArray("weight").size(); i++) {
+                for (int j = 0; j < step.getJsonArray("weight").size(); j++) {
                     INDArray ip = planes.slice(0);
 
                     INDArray kernel = Nd4j.zeros(step.getInt("kW"), step.getInt("kH"));
@@ -253,22 +255,6 @@ public class Waifu2xPyClone {
             e.printStackTrace();
         }
         System.out.println("array written.");
-    }
-
-    private static void showImage(BufferedImage image) {
-        JFrame frame = new JFrame();
-
-        frame.getContentPane().add(new JPanel() {
-            @Override
-            public void paintComponent(Graphics graphics) {
-                graphics.drawImage(image, 0, 0, this);
-            }
-        });
-
-        frame.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
-        frame.getContentPane().setPreferredSize(new Dimension(image.getWidth(), image.getHeight()));
-        frame.pack();
-        frame.setVisible(true);
     }
 
 }
