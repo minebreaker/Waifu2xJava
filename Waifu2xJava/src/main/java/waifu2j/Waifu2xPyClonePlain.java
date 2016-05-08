@@ -4,9 +4,12 @@ package waifu2j;
 
 /*
  * 画像のライセンス表示
- *
  * 「初音ミク」はクリプトン・フューチャー・メディア株式会社の著作物です。
  *  © Crypton Future Media, INC. www.piapro.net
+ *
+ * 参考
+ * https://github.com/nagadomi/waifu2x
+ * https://github.com/WL-Amigo/waifu2x-converter-cpp *モデルを借りています
  */
 
 import javax.imageio.ImageIO;
@@ -15,17 +18,8 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.geom.AffineTransform;
 import java.awt.image.*;
-import java.io.IOException;
-import java.io.Writer;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.sql.DatabaseMetaData;
-import java.util.Arrays;
 import java.util.Hashtable;
-import java.util.StringJoiner;
-import java.util.function.Function;
 
-import static java.awt.image.DataBuffer.TYPE_BYTE;
 import static java.lang.Math.max;
 import static java.lang.Math.min;
 
@@ -33,7 +27,7 @@ public class Waifu2xPyClonePlain {
 
     public static void main(String[] args) throws Exception {
         String modelPath = "model.json";
-        String inPath = "in.png";
+        String inPath = "in_smaller.png";
         String outPath = "out.png";
 
         JsonArray model; // modelはファイル全体がJSONではなく、JSON配列になっている
@@ -101,23 +95,15 @@ public class Waifu2xPyClonePlain {
             }
 
             for (int i = 0; i < outputPlane.length; i++) {
-                boolean flag = false;
                 for (int j = 0; j < outputPlane[0].length; j++) {
                     for (int k = 0; k < outputPlane[0][0].length; k++) {
                         if (outputPlane[i][j][k] < 0.0) {
                             outputPlane[i][j][k] *= 0.1;
-                            flag = true;
                         }
                     }
                 }
-//                if (flag) {
-//                    for (int q = 0; q < outputPlane[i].length; q++) {
-//                        for (int p = 0; p < outputPlane[i][0].length; p++) {
-//                            outputPlane[i][q][p] *= 0.1;
-//                        }
-//                    }
-//                }
             }
+
             planes = outputPlane;
         }
 
