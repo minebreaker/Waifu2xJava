@@ -1,101 +1,113 @@
 package waifu2j;
 
 // waifu2x.pyのコピー実装
-
-/*
- * 画像のライセンス表示
- *
- * 「初音ミク」はクリプトン・フューチャー・メディア株式会社の著作物です。
- *  © Crypton Future Media, INC. www.piapro.net
- */
+// ND4Jを利用
 
 import org.canova.image.loader.ImageLoader;
-import org.nd4j.linalg.api.complex.IComplexNDArray;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.convolution.Convolution;
-import org.nd4j.linalg.convolution.DefaultConvolutionInstance;
 import org.nd4j.linalg.cpu.NDArray;
-import org.nd4j.linalg.cpu.complex.ComplexNDArray;
 import org.nd4j.linalg.factory.Nd4j;
 
 import javax.imageio.ImageIO;
 import javax.json.*;
-import javax.swing.*;
-import java.awt.*;
-import java.awt.geom.AffineTransform;
-import java.awt.image.AffineTransformOp;
 import java.awt.image.BufferedImage;
 import java.awt.image.WritableRaster;
 import java.io.IOException;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.time.Instant;
 import java.util.function.Function;
+
+import static java.lang.Math.max;
+import static java.lang.Math.min;
+import static waifu2j.Waifu2xPyClonePlain.scaleUp;
+import static waifu2j.Waifu2xPyClonePlain.showImage;
 
 public class Waifu2xPyClone {
 
     public static void main(String[] args) throws Exception {
-        String modelPath = "model.json";
-        String inPath = "in_smaller.png";
-        String outPath = "out.png";
 
-        JsonArray model; // modelはファイル全体がJSONではなく、JSON配列になっている
+        Instant timestamp = Instant.now();
+
+        String modelPath = "models/waifu2x-caffe/rgb/scale2.0x_model.json";
+        String inPath = "in.png";
+
+        JsonArray model;
         try (JsonReader jsonReader = Json.createReader(ClassLoader.getSystemResourceAsStream(modelPath))) {
             model = jsonReader.readArray();
         }
 
-        BufferedImage temp = ImageIO.read(ClassLoader.getSystemResource(inPath));
-//        showImage(temp);
-        BufferedImage jImage = new BufferedImage(temp.getWidth() * 2, temp.getHeight() * 2, temp.getType());
-        new AffineTransformOp(AffineTransform.getScaleInstance(2.0, 2.0), AffineTransformOp.TYPE_NEAREST_NEIGHBOR)
-                .filter(temp, jImage);
-//        showImage(jImage);
+        BufferedImage bufferedImage = scaleUp(ImageIO.read(ClassLoader.getSystemResource(inPath)), 2.0);
 
-        // 輝度成分を取り出す
-        INDArray image = convertRgbToYcbcr(new ImageLoader().toBgr(jImage));
-        image = regularize(image, val -> val / 255);
-        INDArray planes = new NDArray(new int[] {1, image.slice(0, 1).length(), image.slice(0, 2).length()});
-        planes.putSlice(0, image.slice(0));
+        INDArray imageOriginal = new ImageLoader().toBgr(bufferedImage);
+
+//        System.out.println(image);
+
+        // UnsupportedOperation orz
+//            image = Nd4j.pad(image.slice(i), new int[] {7, 7, 7}, Nd4j.PadMode.EDGE);
+        INDArray image = padWithEdge(imageOriginal, 7);
+        image = normalize(image, val -> val / 255.0);
+
+        INDArray planes = Nd4j.zeros(image.size(0) - 1, image.size(1), image.size(2));
+        planes.putSlice(0, image.slice(3));
+        planes.putSlice(1, image.slice(2));
+        planes.putSlice(2, image.slice(1));
 
         for (JsonValue stepAsValue : model) {
             JsonObject step = (JsonObject) stepAsValue;
             System.out.println("input:  " + step.getInt("nInputPlane"));
             System.out.println("output: " + step.getInt("nOutputPlane"));
 
-            INDArray outputPlanes = Nd4j.zeros(step.getInt("nOutputPlane"), image.slice(0, 1).length(), image.slice(0, 2).length());
+            INDArray outputPlanes = Nd4j.zeros(
+                    step.getInt("nOutputPlane"),
+                    planes.size(1) - (step.getInt("kH") + 1) / 2,
+                    planes.size(2) - (step.getInt("kW") + 1) / 2);
 
             for (int i = 0; i < step.getJsonArray("bias").size(); i++) {
-                INDArray partial = Nd4j.zeros(3, 3); // 固定値でいいはず(kW, kH)
 
-                for (int j = 0; j < step.getJsonArray("weight").size(); j++) {
-                    INDArray ip = planes.slice(0);
+                JsonArray weight = step.getJsonArray("weight").getJsonArray(i);
+                INDArray partial = Nd4j.zeros(outputPlanes.size(1), outputPlanes.size(2));
+
+                for (int j = 0; j < weight.size(); j++) {
+                    INDArray ip = planes.slice(j);
 
                     INDArray kernel = Nd4j.zeros(step.getInt("kW"), step.getInt("kH"));
-                    for (int k = 0; k < step.getInt("kW"); k++) {
-                        for (int l = 0; l < step.getInt("kH"); l++) {
-                            kernel.put(k, l, step.getJsonArray("weight").getJsonArray(i).getJsonArray(j).getJsonArray(k).getJsonNumber(l).doubleValue());
+                    for (int kH = 0; kH < step.getInt("kW"); kH++) {
+                        for (int kW = 0; kW < step.getInt("kH"); kW++) {
+                            kernel.putScalar(
+                                    new int[] {kH, kW},
+                                    weight.getJsonArray(j).getJsonArray(kH).getJsonNumber(kW).doubleValue());
                         }
                     }
 //                    System.out.println(ip);
 //                    System.out.println(kernel);
 
-                    // org.nd4j.linalg.api.ops.impl.transforms.convolutionに移行する模様。
-                    // まだim2colとcol2imしかない。convは実装されるのだろうか。
-                    INDArray p = Convolution.convn(ip, kernel, Convolution.Type.FULL);
-
-                    partial.add(p);
+                    // 実装されてないっぽい?
+//                    INDArray p = Convolution.conv2d(ip, kernel, Convolution.Type.FULL);
+                    for (int q = 0; q < partial.size(0); q++)
+                        for (int p = 0; p < partial.size(1); p++)
+                            for (int kH = 0; kH < kernel.size(0); kH++)
+                                for (int kW = 0; kW < kernel.size(1); kW++) {
+                                    double temp = partial.getDouble(new int[] {q, p});
+                                    partial.putScalar(
+                                            new int[] {q, p},
+                                            temp + ip.getDouble(q + kH, p + kW) * kernel.getDouble(kH, kW));
+                                }
                 }
 
-                partial.add(step.getJsonArray("bias").getJsonNumber(i).doubleValue());
+                double bias = step.getJsonArray("bias").getJsonNumber(i).doubleValue();
+                partial.addi(bias);
                 outputPlanes.putSlice(i, partial);
             }
 
             for (int d = 0; d < outputPlanes.slice(0, 0).length(); d++) {
                 for (int h = 0; h < outputPlanes.slice(0, 1).length(); h++) {
                     for (int w = 0; w < outputPlanes.slice(0, 2).length(); w++) {
-                        if (outputPlanes.getFloat(new int[] {d, h, w}) < 0) {
-                            outputPlanes.muli(0.1);
-                            break;
+                        double temp =outputPlanes.getDouble(new int[] {d, h, w});
+                        if (temp < 0) {
+                            outputPlanes.putScalar(new int[] {d, h, w}, temp * 0.1);
                         }
                     }
                 }
@@ -103,7 +115,7 @@ public class Waifu2xPyClone {
             planes = outputPlanes;
         }
 
-        image = regularize(image, val -> {
+        planes = normalize(planes, val -> {
             val = val * 255;
             if (val > 255)
                 return 255.0;
@@ -112,11 +124,56 @@ public class Waifu2xPyClone {
             else
                 return val;
         });
-//        INDArray planes = new NDArray(new int[] {1, image.slice(0, 1).length(), image.slice(0, 2).length()});
-        image.putSlice(0, image);
-//        showImage(toImage(convertYcbcrToRgb(image), jImage.getType()));
-//        showImage((toImage(toSingleColor(image, 1), jImage.getType())));
-//        showImage(toSingleScale(imageYCbCr, 0));
+
+        INDArray result = planes;
+//        INDArray result = Nd4j.create(imageOriginal.size(0), imageOriginal.size(1), imageOriginal.size(2));
+//        result.putSlice(0, imageOriginal.slice(0));
+//        result.putSlice(1, planes.slice(0));
+//        result.putSlice(2, planes.slice(1));
+//        result.putSlice(3, planes.slice(2));
+
+        System.out.println(result);
+
+        System.out.println("start: " + timestamp);
+        System.out.println("end:   " + Instant.now());
+
+        BufferedImage resImage = new BufferedImage(imageOriginal.size(2), imageOriginal.size(1), bufferedImage.getType());
+        for (int h = 0; h < imageOriginal.size(1); h++) {
+            for (int w = 0; w < imageOriginal.size(2); w++) {
+                resImage.getRaster().setPixel(w, h, new double[] {
+                        result.getDouble(0, h, w),
+                        result.getDouble(1, h, w),
+                        result.getDouble(2, h, w),
+                        imageOriginal.getDouble(0, h, w)
+                });
+            }
+        }
+
+        showImage(resImage);
+    }
+
+    public static INDArray padWithEdge(INDArray src, int len) {
+        int channel = src.size(0);
+        int height = src.size(1);
+        int width = src.size(2);
+        INDArray dst = Nd4j.zeros(channel, height + len * 2, width + len * 2);
+
+        for (int h = 0; h < dst.size(1); h++) {
+            for (int w = 0; w < dst.size(2); w++) {
+                for (int c = 0; c < channel; c++) {
+                    if (w < len || h < len || w > width - len - 1 || h > height - len - 1) {
+                        dst.putScalar(new int[] {c, h, w}, src.getFloat(new int[] {
+                                c,
+                                min(max(h, len) - len, height - 1),
+                                min(max(w, len) - len, width - 1)
+                        }));
+                    } else {
+                        dst.putScalar(new int[] {c, h, w}, src.getFloat(new int[] {c, h - len, w - len}));
+                    }
+                }
+            }
+        }
+        return dst;
     }
 
     private static BufferedImage toImage(INDArray from, int ImageType) {
@@ -139,7 +196,7 @@ public class Waifu2xPyClone {
         return out;
     }
 
-    private static INDArray regularize(INDArray from, Function<Double, Double> eval) {
+    private static INDArray normalize(INDArray from, Function<Double, Double> eval) {
         INDArray out = Nd4j.zeros(from.slice(0, 0).length(), from.slice(0, 1).length(), from.slice(0, 2).length());
 
         for (int d = 0; d < from.slice(0, 0).length(); d++) {
@@ -244,15 +301,6 @@ public class Waifu2xPyClone {
         }
 
         return out;
-    }
-
-    private static void outputArray(INDArray array, String filename) {
-        try (Writer writer = Files.newBufferedWriter(Paths.get(filename))) {
-            writer.write(array.toString());
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        System.out.println("array written.");
     }
 
 }

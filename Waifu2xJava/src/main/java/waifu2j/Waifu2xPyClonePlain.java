@@ -1,16 +1,7 @@
 package waifu2j;
 
 // waifu2x.pyのコピー実装
-
-/*
- * 画像のライセンス表示
- * 「初音ミク」はクリプトン・フューチャー・メディア株式会社の著作物です。
- *  © Crypton Future Media, INC. www.piapro.net
- *
- * 参考
- * https://github.com/nagadomi/waifu2x
- * https://github.com/WL-Amigo/waifu2x-converter-cpp *モデルを借りています
- */
+// Java SEのクラスのみを使用
 
 import javax.imageio.ImageIO;
 import javax.json.*;
@@ -32,8 +23,8 @@ public class Waifu2xPyClonePlain {
 
         Instant timestamp = Instant.now();
 
-        String modelPath = "model.json";
-        String inPath = "in_smaller.png";
+        String modelPath = "models/waifu2x-caffe/y/scale2.0x_model.json";
+        String inPath = "in.png";
 
         JsonArray model; // modelはファイル全体がJSONではなく、JSON配列になっている
         try (JsonReader jsonReader = Json.createReader(ClassLoader.getSystemResourceAsStream(modelPath))) {
@@ -71,7 +62,7 @@ public class Waifu2xPyClonePlain {
 
                     JsonArray each = weight.getJsonArray(j); // なぜかそのままだとコンパイラーが通らない……
                     double[][] kernel = createArray2d(step.getInt("kH"), step.getInt("kW"),
-                            (q, p) -> each.getJsonArray(p).getJsonNumber(q).doubleValue());
+                            (q, p) -> each.getJsonArray(q).getJsonNumber(p).doubleValue());
 
                     // 畳みこみ計算
                     for (int q = 0; q < partial.length; q++)
@@ -88,9 +79,9 @@ public class Waifu2xPyClonePlain {
                 outputPlane[i] = partial;
             }
 
-            // 0以下の結果は0.1掛け
-            for (int i = 0; i < outputPlane.length; i++) {
-                applyAllIn(outputPlane[i], val -> {
+            // 活性化関数: f(x) = { x >= 0 : x, x < 0 : 0.1 x }
+            for (double[][] eachPlane : outputPlane) {
+                applyAllIn(eachPlane, val -> {
                     if (val < 0.0) return val * 0.1;
                     else return val;
                 });
@@ -135,7 +126,7 @@ public class Waifu2xPyClonePlain {
         return out;
     }
 
-    private static BufferedImage scaleUp(BufferedImage src, double rate) {
+    public static BufferedImage scaleUp(BufferedImage src, double rate) {
         BufferedImage dst = new BufferedImage(
                 src.getWidth() * (int) rate, src.getHeight() * (int) rate, src.getType());
         new AffineTransformOp(AffineTransform.getScaleInstance(rate, rate), AffineTransformOp.TYPE_NEAREST_NEIGHBOR)
@@ -231,7 +222,7 @@ public class Waifu2xPyClonePlain {
         return out;
     }
 
-    private static void showImage(BufferedImage image) {
+    public static void showImage(BufferedImage image) {
         JFrame frame = new JFrame();
 
         frame.getContentPane().add(new JPanel() {

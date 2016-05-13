@@ -29,10 +29,26 @@ public class ND4JSample {
     @Test
     public void test3d() {
         INDArray nd = Nd4j.create(new float[] {1, 2, 3, 4, 5, 6, 7, 8}, new int[] {2, 2, 2});
+        // [[[1, 2]
+        //   [3, 4]]
+        //  [[5, 6]
+        //   [7, 8]]]
         System.out.println(nd);
         System.out.println(nd.getFloat(new int[] {0, 0, 0})); // 1
         System.out.println(nd.getFloat(new int[] {1, 0, 0})); // 5
+        System.out.println(nd.getFloat(new int[] {0, 1, 0})); // 3
+        System.out.println(nd.getFloat(new int[] {0, 0, 1})); // 2
         System.out.println(nd.getFloat(new int[] {1, 1, 1})); // 8
+
+        nd.putScalar(new int[] {0, 0, 0}, 100);
+        nd.putScalar(new int[] {1, 0, 0}, 110);
+        nd.putScalar(new int[] {0, 1, 0}, 120);
+        nd.putScalar(new int[] {0, 0, 1}, 130);
+        System.out.println(nd);
+        // [[[100.00, 130.00]
+        //   [120.00, 4.00  ]]
+        //  [[110.00, 6.00  ]
+        //   [7.00,   8.00  ]]]
     }
 
     @Test
@@ -52,6 +68,16 @@ public class ND4JSample {
         INDArray nd2 = Nd4j.zeros(1, 2, 2);
         nd2.putSlice(0, nd.slice(0));
         System.out.println(nd2);
+    }
+
+    @Test
+    public void testSlicing2() {
+        INDArray nd = Nd4j.create(
+                new float[] {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+                new int[] {2, 2, 2, 2});
+        System.out.println(nd);
+        System.out.println(nd.slice(0));
+        System.out.println(nd.slice(0).slice(0));
     }
 
     @Test
@@ -91,12 +117,13 @@ public class ND4JSample {
 
     @Test
     public void convTest() {
-        INDArray nd = Nd4j.create(new float[] {100, 200, 300, 400, 500, 600, 700, 800, 900}, new int[] {3, 3});
+        INDArray cnd = Nd4j.create(new float[] {1, 1, 1, 1, 1, 1, 1, 1, 1}, new int[] {3, 3});
+        System.out.println(cnd);
 
-        System.out.println(nd);
-        INDArray kernel = Nd4j.create(new double[] {0.5, 0.1, 0.1, 0.1}, new int[] {2, 2});
+        INDArray kernel = Nd4j.create(new float[] {1, 1, 1, 1}, new int[] {2, 2});
 
-        System.out.println(Convolution.convn(nd, kernel, Convolution.Type.VALID));
+        // なんか知らんけど必ず0を返す
+        System.out.println(Convolution.convn(cnd, kernel, Convolution.Type.VALID));
     }
 
 }
