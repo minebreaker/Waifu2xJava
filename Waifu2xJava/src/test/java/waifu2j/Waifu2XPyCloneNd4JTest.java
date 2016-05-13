@@ -6,9 +6,9 @@ import org.nd4j.linalg.factory.Nd4j;
 import static org.hamcrest.CoreMatchers.*;
 
 import static org.junit.Assert.assertThat;
-import static waifu2j.Waifu2xPyClone.padWithEdge;
+import static waifu2j.Waifu2xPyCloneNd4J.padWithEdge;
 
-public class Waifu2xPyCloneTest {
+public class Waifu2XPyCloneNd4JTest {
 
     @Test
     public void testPad() {

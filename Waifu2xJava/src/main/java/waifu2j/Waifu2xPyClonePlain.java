@@ -24,7 +24,7 @@ public class Waifu2xPyClonePlain {
         Instant timestamp = Instant.now();
 
         String modelPath = "models/waifu2x-caffe/y/scale2.0x_model.json";
-        String inPath = "in.png";
+        String inPath = "in_smaller.png";
 
         JsonArray model; // modelはファイル全体がJSONではなく、JSON配列になっている
         try (JsonReader jsonReader = Json.createReader(ClassLoader.getSystemResourceAsStream(modelPath))) {

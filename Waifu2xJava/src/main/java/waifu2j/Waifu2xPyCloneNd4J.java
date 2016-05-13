@@ -5,18 +5,12 @@ package waifu2j;
 
 import org.canova.image.loader.ImageLoader;
 import org.nd4j.linalg.api.ndarray.INDArray;
-import org.nd4j.linalg.convolution.Convolution;
-import org.nd4j.linalg.cpu.NDArray;
 import org.nd4j.linalg.factory.Nd4j;
 
 import javax.imageio.ImageIO;
 import javax.json.*;
 import java.awt.image.BufferedImage;
 import java.awt.image.WritableRaster;
-import java.io.IOException;
-import java.io.Writer;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.function.Function;
 
@@ -25,14 +19,14 @@ import static java.lang.Math.min;
 import static waifu2j.Waifu2xPyClonePlain.scaleUp;
 import static waifu2j.Waifu2xPyClonePlain.showImage;
 
-public class Waifu2xPyClone {
+public class Waifu2xPyCloneNd4J {
 
     public static void main(String[] args) throws Exception {
 
         Instant timestamp = Instant.now();
 
         String modelPath = "models/waifu2x-caffe/rgb/scale2.0x_model.json";
-        String inPath = "in.png";
+        String inPath = "in_smaller.png";
 
         JsonArray model;
         try (JsonReader jsonReader = Json.createReader(ClassLoader.getSystemResourceAsStream(modelPath))) {
@@ -42,8 +36,6 @@ public class Waifu2xPyClone {
         BufferedImage bufferedImage = scaleUp(ImageIO.read(ClassLoader.getSystemResource(inPath)), 2.0);
 
         INDArray imageOriginal = new ImageLoader().toBgr(bufferedImage);
-
-//        System.out.println(image);
 
         // UnsupportedOperation orz
 //            image = Nd4j.pad(image.slice(i), new int[] {7, 7, 7}, Nd4j.PadMode.EDGE);
@@ -81,19 +73,20 @@ public class Waifu2xPyClone {
                                     weight.getJsonArray(j).getJsonArray(kH).getJsonNumber(kW).doubleValue());
                         }
                     }
-//                    System.out.println(ip);
-//                    System.out.println(kernel);
 
                     // 実装されてないっぽい?
 //                    INDArray p = Convolution.conv2d(ip, kernel, Convolution.Type.FULL);
+                    int[] pos = new int[2];
                     for (int q = 0; q < partial.size(0); q++)
                         for (int p = 0; p < partial.size(1); p++)
                             for (int kH = 0; kH < kernel.size(0); kH++)
                                 for (int kW = 0; kW < kernel.size(1); kW++) {
-                                    double temp = partial.getDouble(new int[] {q, p});
+                                    pos[0] = q;
+                                    pos[1] = p;
                                     partial.putScalar(
-                                            new int[] {q, p},
-                                            temp + ip.getDouble(q + kH, p + kW) * kernel.getDouble(kH, kW));
+                                            pos,
+                                            partial.getDouble(pos) +
+                                                    ip.getDouble(q + kH, p + kW) * kernel.getDouble(kH, kW));
                                 }
                 }
 
@@ -102,12 +95,16 @@ public class Waifu2xPyClone {
                 outputPlanes.putSlice(i, partial);
             }
 
+            int[] pos = new int[3];
             for (int d = 0; d < outputPlanes.slice(0, 0).length(); d++) {
                 for (int h = 0; h < outputPlanes.slice(0, 1).length(); h++) {
                     for (int w = 0; w < outputPlanes.slice(0, 2).length(); w++) {
-                        double temp =outputPlanes.getDouble(new int[] {d, h, w});
+                        pos[0] = d;
+                        pos[1] = h;
+                        pos[2] = w;
+                        double temp =outputPlanes.getDouble(pos);
                         if (temp < 0) {
-                            outputPlanes.putScalar(new int[] {d, h, w}, temp * 0.1);
+                            outputPlanes.putScalar(pos, temp * 0.1);
                         }
                     }
                 }
@@ -126,28 +123,21 @@ public class Waifu2xPyClone {
         });
 
         INDArray result = planes;
-//        INDArray result = Nd4j.create(imageOriginal.size(0), imageOriginal.size(1), imageOriginal.size(2));
-//        result.putSlice(0, imageOriginal.slice(0));
-//        result.putSlice(1, planes.slice(0));
-//        result.putSlice(2, planes.slice(1));
-//        result.putSlice(3, planes.slice(2));
-
-        System.out.println(result);
+//        BufferedImage resImage = new BufferedImage(imageOriginal.size(2), imageOriginal.size(1), bufferedImage.getType());
+//        for (int h = 0; h < imageOriginal.size(1); h++) {
+//            for (int w = 0; w < imageOriginal.size(2); w++) {
+//                resImage.getRaster().setPixel(w, h, new double[] {
+//                        result.getDouble(0, h, w),
+//                        result.getDouble(1, h, w),
+//                        result.getDouble(2, h, w),
+//                        imageOriginal.getDouble(0, h, w)
+//                });
+//            }
+//        }
+        BufferedImage resImage = toImage(result, imageOriginal, bufferedImage.getType());
 
         System.out.println("start: " + timestamp);
         System.out.println("end:   " + Instant.now());
-
-        BufferedImage resImage = new BufferedImage(imageOriginal.size(2), imageOriginal.size(1), bufferedImage.getType());
-        for (int h = 0; h < imageOriginal.size(1); h++) {
-            for (int w = 0; w < imageOriginal.size(2); w++) {
-                resImage.getRaster().setPixel(w, h, new double[] {
-                        result.getDouble(0, h, w),
-                        result.getDouble(1, h, w),
-                        result.getDouble(2, h, w),
-                        imageOriginal.getDouble(0, h, w)
-                });
-            }
-        }
 
         showImage(resImage);
     }
@@ -176,24 +166,19 @@ public class Waifu2xPyClone {
         return dst;
     }
 
-    private static BufferedImage toImage(INDArray from, int ImageType) {
-        int height = from.slice(0, 1).length();
-        int width = from.slice(0, 2).length();
-
-        BufferedImage out = new BufferedImage(width, height, ImageType);
-
-        INDArray r = from.slice(3);
-        INDArray g = from.slice(2);
-        INDArray b = from.slice(1);
-        INDArray a = from.slice(0);
-
-        for (int h = 0; h < height; h++) {
-            for (int w = 0; w < width; w++) {
-                WritableRaster raster = out.getRaster();
-                raster.setPixel(w, h, new int[] {r.getInt(h, w), g.getInt(h, w), b.getInt(h, w), a.getInt(h, w)});
+    private static BufferedImage toImage(INDArray from, INDArray alpha, int imageType) {
+        BufferedImage resImage = new BufferedImage(from.size(2), from.size(1), imageType);
+        for (int h = 0; h < from.size(1); h++) {
+            for (int w = 0; w < from.size(2); w++) {
+                resImage.getRaster().setPixel(w, h, new double[] {
+                        from.getDouble(0, h, w),
+                        from.getDouble(1, h, w),
+                        from.getDouble(2, h, w),
+                        alpha.getDouble(0, h, w)
+                });
             }
         }
-        return out;
+        return resImage;
     }
 
     private static INDArray normalize(INDArray from, Function<Double, Double> eval) {
