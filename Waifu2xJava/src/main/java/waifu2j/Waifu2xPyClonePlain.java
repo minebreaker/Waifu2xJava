@@ -3,6 +3,18 @@ package waifu2j;
 // waifu2x.pyのコピー実装
 // Java SEのクラスのみを使用
 
+/*
+ * パフォーマンス ※厳密な測定ではない
+ * Core i7-4770 + GeForce 760
+ *
+ * waifu2x-caffe (RGB) CUDA : 00:00:00.8 + 00.00.00.654
+ * waifu2x-caffe (RGB) CPU  : 00:00:00.7 + 00.00.09.629
+ *
+ * waifu2j
+ * start : 2016-05-16T11:23:46.903Z
+ * end   : 2016-05-16T11:30:01.728Z
+ */
+
 import javax.imageio.ImageIO;
 import javax.json.*;
 import javax.swing.*;
@@ -21,10 +33,10 @@ public class Waifu2xPyClonePlain {
 
     public static void main(String[] args) throws Exception {
 
-        Instant timestamp = Instant.now();
+        Instant start = Instant.now();
 
         String modelPath = "models/waifu2x-caffe/y/scale2.0x_model.json";
-        String inPath = "in_smaller.png";
+        String inPath = "in.png";
 
         JsonArray model; // modelはファイル全体がJSONではなく、JSON配列になっている
         try (JsonReader jsonReader = Json.createReader(ClassLoader.getSystemResourceAsStream(modelPath))) {
@@ -105,8 +117,9 @@ public class Waifu2xPyClonePlain {
                 bufferedImage.getColorModel(), doubleToRaster(convertYcbcrToRgb(out), bufferedImage.getSampleModel()),
                 bufferedImage.isAlphaPremultiplied(), new Hashtable<String, Object>());
 
-        System.out.println("start: " + timestamp);
-        System.out.println("end:   " + Instant.now());
+        Instant end = Instant.now();
+        System.out.println("start: " + start);
+        System.out.println("end:   " + end);
 
         showImage(result);
 
@@ -140,9 +153,9 @@ public class Waifu2xPyClonePlain {
             for (int w = 0; w < out.getWidth(); w++) {
                 if (w < len || h < len || w > out.getWidth() - len - 1 || h > out.getHeight() - len - 1) {
                     out.setPixel(w, h, from.getPixel(
-                                    min(max(w, len) - len, from.getWidth() - 1),
-                                    min(max(h, len) - len, from.getHeight() - 1),
-                                    new double[from.getNumBands()]));
+                            min(max(w, len) - len, from.getWidth() - 1),
+                            min(max(h, len) - len, from.getHeight() - 1),
+                            new double[from.getNumBands()]));
                 } else {
                     out.setPixel(w, h, from.getPixel(w - len, h - len, new double[from.getNumBands()]));
                 }

@@ -3,9 +3,22 @@ package waifu2j;
 // waifu2x.pyのコピー実装
 // ND4Jを利用
 
+/*
+ * putScalar
+ * start: 2016-05-16T13:20:00.247Z
+ * end:   2016-05-16T13:20:05.276Z
+ * point
+ * start: 2016-05-16T13:13:24.609Z
+ * end:   2016-05-16T13:19:34.909Z
+ * ND4J遅い疑惑...何が悪いのか
+ */
+
 import org.canova.image.loader.ImageLoader;
+import org.nd4j.linalg.api.iter.INDArrayIterator;
+import org.nd4j.linalg.api.iter.NdIndexIterator;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.factory.Nd4j;
+import org.nd4j.linalg.indexing.NDArrayIndex;
 
 import javax.imageio.ImageIO;
 import javax.json.*;
@@ -26,7 +39,7 @@ public class Waifu2xPyCloneNd4J {
         Instant timestamp = Instant.now();
 
         String modelPath = "models/waifu2x-caffe/rgb/scale2.0x_model.json";
-        String inPath = "in_smaller.png";
+        String inPath = "color.png";
 
         JsonArray model;
         try (JsonReader jsonReader = Json.createReader(ClassLoader.getSystemResourceAsStream(modelPath))) {
@@ -40,7 +53,7 @@ public class Waifu2xPyCloneNd4J {
         // UnsupportedOperation orz
 //            image = Nd4j.pad(image.slice(i), new int[] {7, 7, 7}, Nd4j.PadMode.EDGE);
         INDArray image = padWithEdge(imageOriginal, 7);
-        image = normalize(image, val -> val / 255.0);
+        forEachInPlace(image, val -> val / 255.0);
 
         INDArray planes = Nd4j.zeros(image.size(0) - 1, image.size(1), image.size(2));
         planes.putSlice(0, image.slice(3));
@@ -58,27 +71,27 @@ public class Waifu2xPyCloneNd4J {
                     planes.size(2) - (step.getInt("kW") + 1) / 2);
 
             for (int i = 0; i < step.getJsonArray("bias").size(); i++) {
-
                 JsonArray weight = step.getJsonArray("weight").getJsonArray(i);
                 INDArray partial = Nd4j.zeros(outputPlanes.size(1), outputPlanes.size(2));
 
                 for (int j = 0; j < weight.size(); j++) {
                     INDArray ip = planes.slice(j);
 
-                    INDArray kernel = Nd4j.zeros(step.getInt("kW"), step.getInt("kH"));
-                    for (int kH = 0; kH < step.getInt("kW"); kH++) {
-                        for (int kW = 0; kW < step.getInt("kH"); kW++) {
-                            kernel.putScalar(
-                                    new int[] {kH, kW},
-                                    weight.getJsonArray(j).getJsonArray(kH).getJsonNumber(kW).doubleValue());
-                        }
-                    }
+                    INDArray kernel = readKernel(weight.getJsonArray(j));
 
                     // 実装されてないっぽい?
 //                    INDArray p = Convolution.conv2d(ip, kernel, Convolution.Type.FULL);
                     int[] pos = new int[2];
                     for (int q = 0; q < partial.size(0); q++)
                         for (int p = 0; p < partial.size(1); p++)
+//                            partial.get(
+//                                    NDArrayIndex.point(q),
+//                                    NDArrayIndex.point(p))
+//                                    .addi(ip.get(
+//                                            NDArrayIndex.interval(q, q + 3),
+//                                            NDArrayIndex.interval(p, p + 3))
+//                                            .mul(kernel)
+//                                            .sumNumber());
                             for (int kH = 0; kH < kernel.size(0); kH++)
                                 for (int kW = 0; kW < kernel.size(1); kW++) {
                                     pos[0] = q;
@@ -95,24 +108,18 @@ public class Waifu2xPyCloneNd4J {
                 outputPlanes.putSlice(i, partial);
             }
 
-            int[] pos = new int[3];
-            for (int d = 0; d < outputPlanes.slice(0, 0).length(); d++) {
-                for (int h = 0; h < outputPlanes.slice(0, 1).length(); h++) {
-                    for (int w = 0; w < outputPlanes.slice(0, 2).length(); w++) {
-                        pos[0] = d;
-                        pos[1] = h;
-                        pos[2] = w;
-                        double temp =outputPlanes.getDouble(pos);
-                        if (temp < 0) {
-                            outputPlanes.putScalar(pos, temp * 0.1);
-                        }
-                    }
-                }
+            NdIndexIterator iter = new NdIndexIterator(outputPlanes.size(0), outputPlanes.size(1), outputPlanes.size(2));
+            while (iter.hasNext()) {
+                int[] pos = iter.next();
+                double temp = outputPlanes.getDouble(pos);
+                if (temp < 0)
+                    outputPlanes.putScalar(pos, temp * 0.1);
             }
+
             planes = outputPlanes;
         }
 
-        planes = normalize(planes, val -> {
+        forEachInPlace(planes, val -> {
             val = val * 255;
             if (val > 255)
                 return 255.0;
@@ -122,24 +129,27 @@ public class Waifu2xPyCloneNd4J {
                 return val;
         });
 
-        INDArray result = planes;
-//        BufferedImage resImage = new BufferedImage(imageOriginal.size(2), imageOriginal.size(1), bufferedImage.getType());
-//        for (int h = 0; h < imageOriginal.size(1); h++) {
-//            for (int w = 0; w < imageOriginal.size(2); w++) {
-//                resImage.getRaster().setPixel(w, h, new double[] {
-//                        result.getDouble(0, h, w),
-//                        result.getDouble(1, h, w),
-//                        result.getDouble(2, h, w),
-//                        imageOriginal.getDouble(0, h, w)
-//                });
-//            }
-//        }
-        BufferedImage resImage = toImage(result, imageOriginal, bufferedImage.getType());
+        BufferedImage resImage = toImage(planes, imageOriginal, bufferedImage.getType());
 
         System.out.println("start: " + timestamp);
         System.out.println("end:   " + Instant.now());
 
         showImage(resImage);
+    }
+
+    private static INDArray readKernel(JsonArray kernelAsJson) {
+        int kH = kernelAsJson.size();
+        int kW = kernelAsJson.getJsonArray(0).size();
+        INDArray kernel = Nd4j.zeros(kW, kH);
+
+        NdIndexIterator kIter = new NdIndexIterator(kernel.size(0), kernel.size(1));
+        while (kIter.hasNext()) {
+            int[] index = kIter.next();
+            kernel.putScalar(index,
+                    kernelAsJson.getJsonArray(index[0]).getJsonNumber(index[1]).doubleValue());
+        }
+
+        return kernel;
     }
 
     public static INDArray padWithEdge(INDArray src, int len) {
@@ -181,18 +191,22 @@ public class Waifu2xPyCloneNd4J {
         return resImage;
     }
 
-    private static INDArray normalize(INDArray from, Function<Double, Double> eval) {
-        INDArray out = Nd4j.zeros(from.slice(0, 0).length(), from.slice(0, 1).length(), from.slice(0, 2).length());
+    private static void forEachInPlace(INDArray from, Function<Double, Double> eval) {
 
-        for (int d = 0; d < from.slice(0, 0).length(); d++) {
-            for (int h = 0; h < from.slice(0, 1).length(); h++) {
-                for (int w = 0; w < from.slice(0, 2).length(); w++) {
-                    out.putScalar(new int[] {d, h, w}, eval.apply(from.getDouble(d, h, w)));
-                }
-            }
+        NdIndexIterator iter = new NdIndexIterator(from.size(0), from.size(1), from.size(2));
+        while (iter.hasNext()) {
+            int[] index = iter.next();
+            double temp = from.getDouble(index);
+            from.putScalar(index, eval.apply(temp));
         }
 
-        return out;
+//        for (int d = 0; d < from.slice(0, 0).length(); d++) {
+//            for (int h = 0; h < from.slice(0, 1).length(); h++) {
+//                for (int w = 0; w < from.slice(0, 2).length(); w++) {
+//                    out.putScalar(new int[] {d, h, w}, eval.apply(from.getDouble(d, h, w)));
+//                }
+//            }
+//        }
     }
 
     private static BufferedImage toSingleScale(INDArray from, int channel) {

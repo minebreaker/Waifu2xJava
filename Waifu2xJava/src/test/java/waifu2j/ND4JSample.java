@@ -126,4 +126,49 @@ public class ND4JSample {
         System.out.println(Convolution.convn(cnd, kernel, Convolution.Type.VALID));
     }
 
+    @Test
+    public void testStack() {
+        INDArray a = Nd4j.create(new float[] {1, 2, 3, 4, 5, 6, 7, 8}, new int[] {2, 2, 2});
+        INDArray b = Nd4j.create(new float[] {110, 120, 130, 140, 150, 160, 170, 180}, new int[] {2, 2, 2});
+        System.out.println(Nd4j.hstack(a, b));
+        System.out.println(Nd4j.vstack(a, b));
+    }
+
+    @Test
+    public void testIndex() {
+        INDArray nd = Nd4j.linspace(1, 18, 18).reshape(2, 3, 3);
+        System.out.println(nd);
+        System.out.println(nd.get(NDArrayIndex.point(0), NDArrayIndex.point(0), NDArrayIndex.point(0)));
+        System.out.println(nd.get(NDArrayIndex.point(1), NDArrayIndex.point(0), NDArrayIndex.point(2)));
+        System.out.println(nd.get(NDArrayIndex.interval(0, 1), NDArrayIndex.interval(1, 3), NDArrayIndex.interval(1, 3)));
+        System.out.println(nd.get(NDArrayIndex.interval(0, 1), NDArrayIndex.interval(1, 2, true), NDArrayIndex.interval(1, 2, true)));
+        System.out.println(nd.get(NDArrayIndex.interval(1, 2), NDArrayIndex.interval(1, 3), NDArrayIndex.interval(1, 3)));
+    }
+
+    @Test
+    public void testCalc() {
+        INDArray a = Nd4j.linspace(1, 4, 4).reshape(2, 2);
+        INDArray b = Nd4j.linspace(1, 4, 4).reshape(2, 2);
+
+        System.out.println(a.mul(2));
+        System.out.println(a.mul(b));
+
+        System.out.println(a.div(2));
+        System.out.println(a.div(b));
+
+        INDArray c = Nd4j.linspace(1, 9, 9).reshape(3, 3);
+        try {
+            System.out.println(c.mul(a));
+        } catch (IllegalArgumentException e) {
+            e.printStackTrace();
+        }
+        try {
+            System.out.println(c.div(a));
+        } catch (IllegalArgumentException e) {
+            e.printStackTrace();
+        }
+
+        System.out.println(a.sumNumber());
+    }
+
 }
