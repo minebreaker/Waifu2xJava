@@ -4,12 +4,16 @@ package waifu2j;
 // ND4Jを利用
 
 /*
+ * color.png
  * putScalar
  * start: 2016-05-16T13:20:00.247Z
  * end:   2016-05-16T13:20:05.276Z
  * point
  * start: 2016-05-16T13:13:24.609Z
  * end:   2016-05-16T13:19:34.909Z
+ * Java
+ * start: 2016-05-16T13:47:59.600Z
+ * end:   2016-05-16T13:54:11.465Z
  * ND4J遅い疑惑...何が悪いのか
  */
 
@@ -79,18 +83,16 @@ public class Waifu2xPyCloneNd4J {
 
                     INDArray kernel = readKernel(weight.getJsonArray(j));
 
-                    // 実装されてないっぽい?
 //                    INDArray p = Convolution.conv2d(ip, kernel, Convolution.Type.FULL);
                     int[] pos = new int[2];
                     for (int q = 0; q < partial.size(0); q++)
                         for (int p = 0; p < partial.size(1); p++)
-//                            partial.get(
-//                                    NDArrayIndex.point(q),
-//                                    NDArrayIndex.point(p))
-//                                    .addi(ip.get(
+//                            partial.put(q, p,
+//                                    ip.get(
 //                                            NDArrayIndex.interval(q, q + 3),
 //                                            NDArrayIndex.interval(p, p + 3))
 //                                            .mul(kernel)
+//                                            .add(partial.getScalar(q, p))
 //                                            .sumNumber());
                             for (int kH = 0; kH < kernel.size(0); kH++)
                                 for (int kW = 0; kW < kernel.size(1); kW++) {
@@ -101,41 +103,41 @@ public class Waifu2xPyCloneNd4J {
                                             partial.getDouble(pos) +
                                                     ip.getDouble(q + kH, p + kW) * kernel.getDouble(kH, kW));
                                 }
+                        }
+
+                    double bias = step.getJsonArray("bias").getJsonNumber(i).doubleValue();
+                    partial.addi(bias);
+                    outputPlanes.putSlice(i, partial);
                 }
 
-                double bias = step.getJsonArray("bias").getJsonNumber(i).doubleValue();
-                partial.addi(bias);
-                outputPlanes.putSlice(i, partial);
+                NdIndexIterator iter = new NdIndexIterator(outputPlanes.size(0), outputPlanes.size(1), outputPlanes.size(2));
+                while (iter.hasNext()) {
+                    int[] pos = iter.next();
+                    double temp = outputPlanes.getDouble(pos);
+                    if (temp < 0)
+                        outputPlanes.putScalar(pos, temp * 0.1);
+                }
+
+                planes = outputPlanes;
             }
 
-            NdIndexIterator iter = new NdIndexIterator(outputPlanes.size(0), outputPlanes.size(1), outputPlanes.size(2));
-            while (iter.hasNext()) {
-                int[] pos = iter.next();
-                double temp = outputPlanes.getDouble(pos);
-                if (temp < 0)
-                    outputPlanes.putScalar(pos, temp * 0.1);
-            }
+            forEachInPlace(planes, val -> {
+                val = val * 255;
+                if (val > 255)
+                    return 255.0;
+                else if (val < 0)
+                    return 0.0;
+                else
+                    return val;
+            });
 
-            planes = outputPlanes;
+            BufferedImage resImage = toImage(planes, imageOriginal, bufferedImage.getType());
+
+            System.out.println("start: " + timestamp);
+            System.out.println("end:   " + Instant.now());
+
+            showImage(resImage);
         }
-
-        forEachInPlace(planes, val -> {
-            val = val * 255;
-            if (val > 255)
-                return 255.0;
-            else if (val < 0)
-                return 0.0;
-            else
-                return val;
-        });
-
-        BufferedImage resImage = toImage(planes, imageOriginal, bufferedImage.getType());
-
-        System.out.println("start: " + timestamp);
-        System.out.println("end:   " + Instant.now());
-
-        showImage(resImage);
-    }
 
     private static INDArray readKernel(JsonArray kernelAsJson) {
         int kH = kernelAsJson.size();

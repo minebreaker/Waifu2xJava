@@ -3,13 +3,10 @@ package waifu2j;
 import org.junit.Test;
 import org.nd4j.linalg.api.complex.IComplexNDArray;
 import org.nd4j.linalg.api.ndarray.INDArray;
+import org.nd4j.linalg.api.ops.impl.transforms.VectorFFT;
 import org.nd4j.linalg.convolution.Convolution;
-import org.nd4j.linalg.convolution.DefaultConvolutionInstance;
-import org.nd4j.linalg.cpu.NDArray;
-import org.nd4j.linalg.cpu.complex.ComplexNDArray;
 import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.indexing.NDArrayIndex;
-import org.omg.PortableInterceptor.SYSTEM_EXCEPTION;
 
 public class ND4JSample {
 
@@ -117,13 +114,24 @@ public class ND4JSample {
 
     @Test
     public void convTest() {
-        INDArray cnd = Nd4j.create(new float[] {1, 1, 1, 1, 1, 1, 1, 1, 1}, new int[] {3, 3});
+        INDArray cnd = Nd4j.linspace(1, 25, 25).reshape(5, 5);
         System.out.println(cnd);
 
-        INDArray kernel = Nd4j.create(new float[] {1, 1, 1, 1}, new int[] {2, 2});
+        INDArray kernel = Nd4j.create(new float[] {1, 1, 1, 1, 1, 1, 1, 1, 1}, new int[] {3, 3});
 
         // なんか知らんけど必ず0を返す
-        System.out.println(Convolution.convn(cnd, kernel, Convolution.Type.VALID));
+        // FFTで0になったぞどういうことなの...
+        System.out.println(Convolution.conv2d(cnd, kernel, Convolution.Type.VALID));
+
+//        IComplexNDArray cin = Nd4j.createComplex(Nd4j.linspace(1, 4, 4));
+//        System.out.println(cin);
+//        System.out.println(FFT.fftn(cin));
+
+        IComplexNDArray in = Nd4j.createComplex(Nd4j.linspace(1, 8,8 ));
+        IComplexNDArray out = Nd4j.complexZeros(8);
+        Nd4j.getExecutioner().exec(new VectorFFT(in, out, 4));
+        System.out.println(in);
+        System.out.println(out);
     }
 
     @Test
@@ -160,15 +168,22 @@ public class ND4JSample {
         try {
             System.out.println(c.mul(a));
         } catch (IllegalArgumentException e) {
-            e.printStackTrace();
+//            e.printStackTrace();
         }
         try {
             System.out.println(c.div(a));
         } catch (IllegalArgumentException e) {
-            e.printStackTrace();
+//            e.printStackTrace();
         }
 
         System.out.println(a.sumNumber());
+        System.out.println(a.mmul(b));
+
+        INDArray d = Nd4j.linspace(1, 4, 4);
+        INDArray e = Nd4j.linspace(1, 4, 4).reshape(4, 1);
+        System.out.println(d);
+        System.out.println(d.mmul(e));
+        System.out.println(e.mmul(d));
     }
 
 }
