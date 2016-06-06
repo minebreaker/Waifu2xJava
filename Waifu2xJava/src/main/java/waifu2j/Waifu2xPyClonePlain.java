@@ -15,6 +15,8 @@ package waifu2j;
  * end   : 2016-05-16T11:30:01.728Z
  */
 
+import org.jtransforms.fft.DoubleFFT_2D;
+
 import javax.imageio.ImageIO;
 import javax.json.*;
 import javax.swing.*;
@@ -77,11 +79,8 @@ public class Waifu2xPyClonePlain {
                             (q, p) -> each.getJsonArray(q).getJsonNumber(p).doubleValue());
 
                     // 畳みこみ計算
-                    for (int q = 0; q < partial.length; q++)
-                        for (int p = 0; p < partial[0].length; p++)
-                            for (int kH = 0; kH < kernel.length; kH++)
-                                for (int kW = 0; kW < kernel[0].length; kW++)
-                                    partial[q][p] += ip[q + kH][p + kW] * kernel[kH][kW];
+//                    convolve(ip, kernel, partial);
+                    convolveFft(ip, kernel, partial);
                 }
 
                 // バイアスを加える
@@ -123,6 +122,53 @@ public class Waifu2xPyClonePlain {
 
         showImage(result);
 
+    }
+
+    private static void convolve(double[][] src, double[][] kernel, double[][] dst) {
+        for (int q = 0; q < dst.length; q++)
+            for (int p = 0; p < dst[0].length; p++)
+                for (int kH = 0; kH < kernel.length; kH++)
+                    for (int kW = 0; kW < kernel[0].length; kW++)
+                        dst[q][p] += src[q + kH][p + kW] * kernel[kH][kW];
+    }
+
+    public static void convolveFft(double[][] src, double[][] kernel, double[][] dst) {
+
+        int h = nearestPowerOf2(src.length);
+        int w = nearestPowerOf2(src[0].length) * 2;
+
+        double[][] rSrc = createArray2d(h, w, (q, p) -> (q >= src.length || p >= src[0].length) ? 0.0 : src[q][p]);
+        double[][] rK = createArray2d(h, w, (q, p) -> (q >= kernel.length || p >= kernel[0].length) ? 0.0 : kernel[q][p]);
+
+        DoubleFFT_2D fft = new DoubleFFT_2D(h, w / 2);
+        fft.realForwardFull(rSrc);
+        fft.realForwardFull(rK);
+
+        double[][] mul = new double[h][w];
+        for (int q = 0; q < rSrc.length; q++) {
+            for (int p = 0; p < rSrc[0].length; p += 2) {
+                mul[q][p] = rSrc[q][p] * rK[q][p] - rSrc[q][p + 1] * rK[q][p + 1];
+                mul[q][p + 1] = rSrc[q][p + 1] * rK[q][p] + rSrc[q][p] * rK[q][p + 1];
+            }
+        }
+
+        fft.complexInverse(mul, true);
+
+        for (int q = 0; q < dst.length; q++) {
+            for (int p = 0; p < dst[0].length; p++) {
+                dst[q][p] += mul[q + (kernel.length + 1) / 2][(p + (kernel[0].length + 1) / 2) * 2];
+            }
+        }
+    }
+
+    public static int nearestPowerOf2(int num) {
+        int powerOf2 = 32; // まあ実用上これくらい?
+        while (true) {
+            if (powerOf2 > num)
+                return powerOf2;
+            else
+                powerOf2 <<= 1;
+        }
     }
 
     private static void applyAllIn(double[][] src, Function<Double, Double> func) {

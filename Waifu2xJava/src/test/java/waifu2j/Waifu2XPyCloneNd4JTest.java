@@ -3,8 +3,8 @@ package waifu2j;
 import org.junit.Test;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.factory.Nd4j;
-import static org.hamcrest.CoreMatchers.*;
 
+import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertThat;
 import static waifu2j.Waifu2xPyCloneNd4J.padWithEdge;
 
